@@ -3,3 +3,64 @@ server:
 spring:
   application:
     name: ms-cleanfresh-reportes
+  # Sin valores por defecto a propósito: la conexión llega solo por variables de entorno y el servicio no arranca si faltan.
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  # Cliente Kafka (Spec 044). KAFKA_BOOTSTRAP_SERVERS lista los 3 brokers: si cae uno, el consumidor sigue con los otros.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+    client-id: ms-cleanfresh-reportes
+    consumer:
+      # Grupo propio: reportes y auditoria leen los mismos eventos, cada uno completo y a su ritmo.
+      group-id: reportes-kpis
+      # Commit manual: el offset avanza solo después de guardar el evento (si el servicio cae antes, el evento se vuelve a entregar).
+      enable-auto-commit: false
+      # Un grupo nuevo empieza desde el principio: reconstruye los reportes con la historia de los eventos.
+      auto-offset-reset: earliest
+      isolation-level: read_committed
+      max-poll-records: 50
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # Un mensaje ilegible no tumba al consumidor: ErrorHandlingDeserializer lo marca y el manejador lo manda al DLT.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+        spring.json.value.default.type: com.cleanfresh.ms_cleanfresh_reportes.messaging.OrderEventMessage
+        spring.json.use.type.headers: false
+        spring.json.trusted.packages: com.cleanfresh.ms_cleanfresh_reportes.messaging
+        # Reparto de particiones entre instancias sin detener a todos en cada cambio (rebalanceo cooperativo).
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+        max.poll.interval.ms: 300000
+    listener:
+      ack-mode: manual
+      # Una hilo por partición de orders.events (3).
+      concurrency: 3
+      missing-topics-fatal: false
+
+# Eventos con Kafka (Spec 044). Apagado por defecto, como RabbitMQ en los otros servicios.
+app:
+  kafka:
+    enabled: ${KAFKA_ENABLED:false}
+    topics:
+      orders-events: orders.events
+    # Los mensajes que fallan van a orders.events.reportes.DLT
+    consumidor-dlt: reportes
+    reintentos: 3
+    espera-inicial-ms: 500
+    espera-maxima-ms: 5000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

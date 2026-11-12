@@ -3,7 +3,7 @@
 Parte de **Clean&Fresh Manager**, sistema de varios repositorios (DSY1107 Cloud Native 1, DuocUC; Evaluación Parcial N°2).
 Este repositorio es el servicio de **reportes** (Spring Boot 4.1.1, Java 21, Maven), puerto **8084**.
 
-Esqueleto de la entrega 2: responde datos fijos, sin base de datos. Solo lo consulta el BFF (`/api/reportes`, rol Admin).
+**Consume** `orders.events` de Kafka (grupo `reportes-kpis`, commit manual, DLT `orders.events.reportes.DLT`) y calcula KPIs, ventas por hora, lead time, estados activos y servicios más pedidos en PostgreSQL (`reportes_db`), sin consultar a `orders`. Solo lo consulta el BFF (`/api/reportes/**`, rol Admin).
 
 ## Contexto del sistema
 
